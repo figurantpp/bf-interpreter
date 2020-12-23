@@ -3,12 +3,22 @@
 #include <string.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <time.h>
+
 #include "bf/bf.h"
 #include "bf/bf_tests.h"
+#include "bf/bf_profile.h"
 
 #define RED_COLOR "\033[0;31m"
 #define RESET_COLOR "\033[0;0m"
 #define GREEN_COLOR "\033[0;32m"
+
+#define PROFILE_DIRECTORY "/home/figurantpp/Desktop/programming/c/bf/test_input"
+
+#include "external/streams.h"
+
 
 void bf_test()
 {
@@ -81,6 +91,68 @@ void bf_test()
     free(output);
 
     printf(GREEN_COLOR "All %lu Tests Passed" RESET_COLOR, test_index);
+}
+
+__attribute__((returns_nonnull))
+FILE *get_file(const char *path)
+{
+    FILE *file = fopen(path, "r");
+
+    if (!file)
+    {
+        fprintf(stderr, "Failed to open file '%s' : %s\n", path, strerror(errno));
+        abort();
+    }
+
+    return file;
+}
+
+void bf_profile()
+{
+    struct BFProfileUnit* unit = bf_global_profile_unit;
+
+    unsigned long unit_number = 1;
+
+    FILE *input_file;
+    FILE *source_file;
+
+    if (chdir(PROFILE_DIRECTORY) != 0)
+    {
+        perror("Failed to load profile directory (" PROFILE_DIRECTORY ")");
+        abort();
+    }
+
+    while (unit->source_file_name)
+    {
+        printf("Profiling #%lu\n", unit_number);
+
+        source_file = get_file(unit->source_file_name);
+
+        char *source_code = read_whole_file(source_file, NULL);
+
+        if (!source_code)
+        {
+            fprintf(stderr, "Failed to load input file %s: %s", unit->input_file_name, strerror(errno));
+            abort();
+        }
+
+        fclose(source_file);
+
+        input_file = unit->input_file_name ? get_file(unit->input_file_name) : stdin;
+
+        clock_t clocks_before = clock();
+
+        bf_execute(source_code, input_file, stdout);
+
+        clock_t clocks_after = clock();
+
+        printf("Profiling #%lu result: \n", unit_number);
+        printf("Clocks: %lu\n", clocks_after - clocks_before);
+        printf("Approximate Seconds: %lu\n\n", (clocks_after - clocks_before) / CLOCKS_PER_SEC);
+
+        unit_number++;
+        unit++;
+    }
 }
 
 int main()
