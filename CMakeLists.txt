@@ -3,7 +3,7 @@ project(bf C)
 
 set(CMAKE_C_STANDARD 99)
 
-set(CMAKE_C_FLAGS "-Og")
+set(CMAKE_C_FLAGS "-O3")
 
 add_library(
         external
