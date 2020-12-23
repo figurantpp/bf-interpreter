@@ -157,6 +157,6 @@ void bf_benchmark()
 
 int main()
 {
-    bf_test();
+    bf_benchmark();
     return 0;
 }
