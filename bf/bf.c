@@ -9,6 +9,50 @@
 #include <assert.h>
 #include <stdlib.h>
 
+struct BFState
+{
+    const char *source_code_start;
+    const char *source_cursor;
+    char *data_cursor;
+    char *data_buffer_start;
+    FILE *output_file;
+    FILE *input_file;
+    size_t data_buffer_limit;
+    size_t source_code_length;
+
+    struct BFMetadata
+    {
+        struct BFMetadataBracketPair
+        {
+            const char *left_brace;
+            const char *right_brace;
+        } *left_bracket_index;
+
+        struct BFMetadataBracketPair *right_bracket_index;
+
+        size_t bracket_count;
+    } metadata;
+
+
+};
+
+static int bf_compare_left_index(const void *first, const void* second)
+{
+    const struct BFMetadataBracketPair *first_pair = first;
+    const struct BFMetadataBracketPair *second_pair = second;
+
+    return (int)(first_pair->left_brace - second_pair->left_brace);
+}
+
+static int bf_compare_right_index(const void *first, const void* second)
+{
+    const struct BFMetadataBracketPair *first_pair = first;
+    const struct BFMetadataBracketPair *second_pair = second;
+
+    return (int)(first_pair->right_brace - second_pair->right_brace);
+}
+
+static void bf_execute_state(struct BFState *bf_state);
 
 
 void bf_advance_data_cursor(struct BFState *bf_state)
@@ -67,6 +111,79 @@ void bf_left_brace(struct BFState *bf_state)
     if (*bf_state->data_cursor != 0)
     { return; }
 
+    struct BFMetadataBracketPair key = {.left_brace = bf_state->source_cursor};
+    struct BFMetadataBracketPair* result = bsearch(&key,
+            bf_state->metadata.left_bracket_index, bf_state->metadata.bracket_count, sizeof(key),
+            bf_compare_left_index);
+
+    if (result == NULL)
+    {
+        fprintf(stderr, "No result found for left brace at position %lu",
+                bf_state->source_cursor - bf_state->source_code_start);
+        abort();
+    }
+
+    bf_state->source_cursor = result->right_brace;
+}
+
+// 	if the byte at the data pointer is nonzero,
+// 	then instead of moving the instruction pointer forward to the next command,
+// 	jump it back to the command after the matching [ command.
+void bf_right_brace(struct BFState *bf_state)
+{
+    if (*bf_state->data_cursor == 0)
+    { return; }
+
+    struct BFMetadataBracketPair key = {.right_brace = bf_state->source_cursor};
+    struct BFMetadataBracketPair* result = bsearch(&key, bf_state->metadata.right_bracket_index, bf_state->metadata.bracket_count,
+                                                   sizeof(key), bf_compare_right_index);
+
+    if (result == NULL)
+    {
+        fprintf(stderr, "No result found for right brace at position %lu",
+                bf_state->source_cursor - bf_state->source_code_start);
+        abort();
+    }
+
+    bf_state->source_cursor = result->left_brace;
+}
+
+void bf_advance_instruction(struct BFState *bf_state)
+{
+    bf_state->source_cursor++;
+}
+
+void bf_loop(struct BFState *bf_state)
+{
+    while (bf_state->source_cursor != bf_state->source_code_start + bf_state->source_code_length)
+    {
+        switch (*bf_state->source_cursor)
+        {
+            case '>': bf_advance_data_cursor(bf_state);
+                break;
+            case '<': bf_retreat_data_cursor(bf_state);
+                break;
+            case '+': bf_increment_value(bf_state);
+                break;
+            case '-': bf_decrement_value(bf_state);
+                break;
+            case '[': bf_left_brace(bf_state);
+                break;
+            case ']': bf_right_brace(bf_state);
+                break;
+            case '.': bf_write_output(bf_state);
+                break;
+            case ',': bf_read_input(bf_state);
+                break;
+        }
+
+        bf_advance_instruction(bf_state);
+    }
+}
+
+
+static void bf_seek_matching_right_brace(struct BFState *bf_state)
+{
     typeof(bf_state->source_cursor)
             pointer = bf_state->source_cursor,
             end = bf_state->source_cursor + bf_state->source_code_length;
@@ -114,89 +231,85 @@ void bf_left_brace(struct BFState *bf_state)
     assert(*pointer == ']');
 
     bf_state->source_cursor = pointer;
-
 }
 
-// 	if the byte at the data pointer is nonzero,
-// 	then instead of moving the instruction pointer forward to the next command,
-// 	jump it back to the command after the matching [ command.
-void bf_right_brace(struct BFState *bf_state)
+
+void bf_get_metadata(struct BFState *bf_state)
 {
-    if (*bf_state->data_cursor == 0)
-    { return; }
+    // First part: looking at the source to find number of open and close braces
 
-    typeof(bf_state->source_cursor)
-            pointer = bf_state->source_cursor;
+    unsigned long left_brace_count = 0;
+    unsigned long right_brace_count = 0;
 
-    int open_count = 1;
+    const char *position = bf_state->source_code_start;
 
-    pointer--;
+    const char *end = bf_state->source_code_start + bf_state->source_code_length;
 
-    while (open_count != 0 && pointer != bf_state->source_code_start)
+    while (position != end)
     {
-        switch (*pointer)
+        if (*position == '[')
         {
-            case '[': open_count--; break;
-            case ']': open_count++; break;
+            left_brace_count++;
+        }
+        else if (*position == ']')
+        {
+            right_brace_count++;
         }
 
-        pointer--;
-
+        position++;
     }
 
-    // Pointer will point to the char before the '[' because of the while loop
-    // So we need to adjust it to the following '['
-    pointer++;
-
-    if (open_count != 0)
+    if (left_brace_count != right_brace_count)
     {
-        fprintf(stderr, "Unclosed bracket at char %lu\n",
-                bf_state->source_cursor - bf_state->source_code_start);
-
+        fprintf(stderr, "Invalid source code. (%zu) left braces while (%zu) right braces found.\n",
+                left_brace_count, right_brace_count);
         abort();
     }
 
-    if (*pointer != '[')
+    bf_state->metadata.bracket_count = left_brace_count;
+
+    bf_state->metadata.left_bracket_index = malloc(left_brace_count * sizeof(struct BFMetadataBracketPair));
+    bf_state->metadata.right_bracket_index = malloc(left_brace_count * sizeof(struct BFMetadataBracketPair));
+
+    if (!bf_state->metadata.left_bracket_index || !bf_state->metadata.right_bracket_index)
     {
-        printf("*pointer: %d\n", *pointer);
+        fputs("Failed to allocate index to execute source code", stderr);
+        abort();
     }
 
-    assert(*pointer == '[');
+    position = bf_state->source_code_start;
 
-    bf_state->source_cursor = pointer;
-}
+    // Second part: mapping positions
 
-void bf_advance_instruction(struct BFState *bf_state)
-{
-    bf_state->source_cursor++;
-}
+    size_t index_position = 0;
 
-void bf_loop(struct BFState *bf_state)
-{
-    while (bf_state->source_cursor != bf_state->source_code_start + bf_state->source_code_length)
+    while (position != end)
     {
-        switch (*bf_state->source_cursor)
+        if (*position == '[')
         {
-            case '>': bf_advance_data_cursor(bf_state);
-                break;
-            case '<': bf_retreat_data_cursor(bf_state);
-                break;
-            case '+': bf_increment_value(bf_state);
-                break;
-            case '-': bf_decrement_value(bf_state);
-                break;
-            case '[': bf_left_brace(bf_state);
-                break;
-            case ']': bf_right_brace(bf_state);
-                break;
-            case '.': bf_write_output(bf_state);
-                break;
-            case ',': bf_read_input(bf_state);
-                break;
+            bf_state->source_cursor = position;
+            bf_seek_matching_right_brace(bf_state);
+
+            // Both left and right index have to be mapped
+            bf_state->metadata.left_bracket_index[index_position].left_brace = position;
+            bf_state->metadata.left_bracket_index[index_position].right_brace = bf_state->source_cursor;
+
+            bf_state->metadata.right_bracket_index[index_position].left_brace = position;
+            bf_state->metadata.right_bracket_index[index_position].right_brace = bf_state->source_cursor;
+
+            index_position++;
         }
 
-        bf_advance_instruction(bf_state);
+        position++;
     }
+
+
+    // Third part: sort indexes
+
+    qsort(bf_state->metadata.left_bracket_index, left_brace_count, sizeof(struct BFMetadataBracketPair), bf_compare_left_index);
+    qsort(bf_state->metadata.right_bracket_index, right_brace_count, sizeof(struct BFMetadataBracketPair), bf_compare_right_index);
+
+    bf_state->source_cursor = bf_state->source_code_start;
 }
 
 void bf_execute(const char *source_code, FILE* input_file, FILE *output_file)
@@ -217,7 +330,7 @@ void bf_execute_string(const char *source_code)
     bf_execute(source_code, stdin, stdout);
 }
 
-void bf_execute_state(struct BFState *bf_state)
+static void bf_execute_state(struct BFState *bf_state)
 {
     if (bf_state == NULL)
     {
@@ -271,6 +384,8 @@ void bf_execute_state(struct BFState *bf_state)
     {
         bf_state->source_cursor = bf_state->source_code_start;
     }
+
+    bf_get_metadata(bf_state);
 
     bf_loop(bf_state);
 

@@ -79,6 +79,8 @@ void bf_test()
 
         input_file = NULL;
         printf("Test #%lu (%s) passed\n", test_index + 1, test->test_name);
+        fflush(stdout);
+        fflush(stderr);
 
         test++;
         test_index++;
@@ -157,6 +159,6 @@ void bf_profile()
 
 int main()
 {
-    bf_test();
+    bf_profile();
     return 0;
 }
