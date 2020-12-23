@@ -11,6 +11,8 @@
 #include "bf/bf_tests.h"
 #include "bf/bf_benchmark.h"
 
+#include "cmap/cmap.h"
+
 #define RED_COLOR "\033[0;31m"
 #define RESET_COLOR "\033[0;0m"
 #define GREEN_COLOR "\033[0;32m"

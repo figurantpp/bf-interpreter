@@ -3,6 +3,7 @@
 //
 
 #include "bf.h"
+#include "../cmap/cmap.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -24,35 +25,12 @@ struct BFState
 
     struct BFMetadata
     {
-        struct BFMetadataBracketPair
-        {
-            const char *left_brace;
-            const char *right_brace;
-        } *left_bracket_index;
-
-        struct BFMetadataBracketPair *right_bracket_index;
-
-        size_t bracket_count;
+        CMap *brace_map;
     } metadata;
 
 
 };
 
-static inline int bf_compare_left_index(const void *first, const void* second)
-{
-    const struct BFMetadataBracketPair *first_pair = first;
-    const struct BFMetadataBracketPair *second_pair = second;
-
-    return (int)(first_pair->left_brace - second_pair->left_brace);
-}
-
-static inline int bf_compare_right_index(const void *first, const void* second)
-{
-    const struct BFMetadataBracketPair *first_pair = first;
-    const struct BFMetadataBracketPair *second_pair = second;
-
-    return (int)(first_pair->right_brace - second_pair->right_brace);
-}
 
 static void bf_execute_state(struct BFState *bf_state);
 
@@ -117,19 +95,18 @@ void bf_left_brace(struct BFState *bf_state)
     if (*bf_state->data_cursor != 0)
     { return; }
 
-    struct BFMetadataBracketPair key = {.left_brace = bf_state->source_cursor};
-    struct BFMetadataBracketPair* result = bsearch(&key,
-            bf_state->metadata.left_bracket_index, bf_state->metadata.bracket_count, sizeof(key),
-            bf_compare_left_index);
+    const char *result = cmap_get(bf_state->metadata.brace_map, bf_state->source_cursor);
 
+#if BOUND_CHECK
     if (result == NULL)
     {
         fprintf(stderr, "No result found for left brace at position %lu",
                 bf_state->source_cursor - bf_state->source_code_start);
         abort();
     }
+#endif
 
-    bf_state->source_cursor = result->right_brace;
+    bf_state->source_cursor = result;
 }
 
 // 	if the byte at the data pointer is nonzero,
@@ -140,18 +117,19 @@ void bf_right_brace(struct BFState *bf_state)
     if (*bf_state->data_cursor == 0)
     { return; }
 
-    struct BFMetadataBracketPair key = {.right_brace = bf_state->source_cursor};
-    struct BFMetadataBracketPair* result = bsearch(&key, bf_state->metadata.right_bracket_index, bf_state->metadata.bracket_count,
-                                                   sizeof(key), bf_compare_right_index);
+    const char *result = cmap_get(bf_state->metadata.brace_map, bf_state->source_cursor);
 
+#if BOUND_CHECK
     if (result == NULL)
     {
-        fprintf(stderr, "No result found for right brace at position %lu",
+        fprintf(stderr, "No result found for left brace at position %lu",
                 bf_state->source_cursor - bf_state->source_code_start);
         abort();
     }
+#endif
 
-    bf_state->source_cursor = result->left_brace;
+    bf_state->source_cursor = result;
+
 }
 
 __attribute__((always_inline))
@@ -245,6 +223,16 @@ void bf_get_metadata(struct BFState *bf_state)
 {
     // First part: looking at the source to find number of open and close braces
 
+    CMap *map = cmap_new();
+
+    if (map == NULL)
+    {
+        fprintf(stderr, "Allocation of map to execute source code failed\n");
+        abort();
+    }
+
+    bf_state->metadata.brace_map = map;
+
     unsigned long left_brace_count = 0;
     unsigned long right_brace_count = 0;
 
@@ -273,17 +261,6 @@ void bf_get_metadata(struct BFState *bf_state)
         abort();
     }
 
-    bf_state->metadata.bracket_count = left_brace_count;
-
-    bf_state->metadata.left_bracket_index = malloc(left_brace_count * sizeof(struct BFMetadataBracketPair));
-    bf_state->metadata.right_bracket_index = malloc(left_brace_count * sizeof(struct BFMetadataBracketPair));
-
-    if (!bf_state->metadata.left_bracket_index || !bf_state->metadata.right_bracket_index)
-    {
-        fputs("Failed to allocate index to execute source code", stderr);
-        abort();
-    }
-
     position = bf_state->source_code_start;
 
     // Second part: mapping positions
@@ -298,11 +275,8 @@ void bf_get_metadata(struct BFState *bf_state)
             bf_seek_matching_right_brace(bf_state);
 
             // Both left and right index have to be mapped
-            bf_state->metadata.left_bracket_index[index_position].left_brace = position;
-            bf_state->metadata.left_bracket_index[index_position].right_brace = bf_state->source_cursor;
-
-            bf_state->metadata.right_bracket_index[index_position].left_brace = position;
-            bf_state->metadata.right_bracket_index[index_position].right_brace = bf_state->source_cursor;
+            cmap_set(bf_state->metadata.brace_map, position, bf_state->source_cursor);
+            cmap_set(bf_state->metadata.brace_map, bf_state->source_cursor, position);
 
             index_position++;
         }
@@ -313,8 +287,6 @@ void bf_get_metadata(struct BFState *bf_state)
 
     // Third part: sort indexes
 
-    qsort(bf_state->metadata.left_bracket_index, left_brace_count, sizeof(struct BFMetadataBracketPair), bf_compare_left_index);
-    qsort(bf_state->metadata.right_bracket_index, right_brace_count, sizeof(struct BFMetadataBracketPair), bf_compare_right_index);
 
     bf_state->source_cursor = bf_state->source_code_start;
 }
