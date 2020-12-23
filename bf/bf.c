@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#define BOUND_CHECK 0
+
 struct BFState
 {
     const char *source_code_start;
@@ -36,7 +38,7 @@ struct BFState
 
 };
 
-static int bf_compare_left_index(const void *first, const void* second)
+static inline int bf_compare_left_index(const void *first, const void* second)
 {
     const struct BFMetadataBracketPair *first_pair = first;
     const struct BFMetadataBracketPair *second_pair = second;
@@ -44,7 +46,7 @@ static int bf_compare_left_index(const void *first, const void* second)
     return (int)(first_pair->left_brace - second_pair->left_brace);
 }
 
-static int bf_compare_right_index(const void *first, const void* second)
+static inline int bf_compare_right_index(const void *first, const void* second)
 {
     const struct BFMetadataBracketPair *first_pair = first;
     const struct BFMetadataBracketPair *second_pair = second;
@@ -57,37 +59,41 @@ static void bf_execute_state(struct BFState *bf_state);
 
 void bf_advance_data_cursor(struct BFState *bf_state)
 {
+#if BOUND_CHECK
     if (bf_state->data_cursor == bf_state->data_buffer_start + bf_state->data_buffer_limit)
     {
         fprintf(stderr, "Exceeded buffer end (position %zu)\n", bf_state->data_buffer_limit);
         abort();
     }
+#endif
 
     bf_state->data_cursor++;
 }
 
 void bf_retreat_data_cursor(struct BFState *bf_state)
 {
+#if BOUND_CHECK
     if (bf_state->data_cursor == bf_state->data_buffer_start)
     {
         fprintf(stderr, "Tried to move before start of data buffer.\n");
         abort();
     }
+#endif
 
     bf_state->data_cursor--;
 }
 
-void bf_increment_value(struct BFState *bf_state)
+static inline void bf_increment_value(struct BFState *bf_state)
 {
     (*bf_state->data_cursor)++;
 }
 
-void bf_decrement_value(struct BFState *bf_state)
+static inline void bf_decrement_value(struct BFState *bf_state)
 {
     (*bf_state->data_cursor)--;
 }
 
-void bf_write_output(struct BFState *bf_state)
+static inline void bf_write_output(struct BFState *bf_state)
 {
     fputc(*bf_state->data_cursor, bf_state->output_file);
 }
@@ -148,7 +154,8 @@ void bf_right_brace(struct BFState *bf_state)
     bf_state->source_cursor = result->left_brace;
 }
 
-void bf_advance_instruction(struct BFState *bf_state)
+__attribute__((always_inline))
+static inline void bf_advance_instruction(struct BFState *bf_state)
 {
     bf_state->source_cursor++;
 }
