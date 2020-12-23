@@ -9,7 +9,7 @@
 
 #include "bf/bf.h"
 #include "bf/bf_tests.h"
-#include "bf/bf_profile.h"
+#include "bf/bf_benchmark.h"
 
 #define RED_COLOR "\033[0;31m"
 #define RESET_COLOR "\033[0;0m"
@@ -107,9 +107,9 @@ FILE *get_file(const char *path)
     return file;
 }
 
-void bf_profile()
+void bf_benchmark()
 {
-    struct BFProfileUnit* unit = bf_global_profile_unit;
+    struct BFBenchmarkUnit* unit = bf_global_benchmark_units;
 
     unsigned long unit_number = 1;
 
@@ -118,13 +118,13 @@ void bf_profile()
 
     if (chdir(PROFILE_DIRECTORY) != 0)
     {
-        perror("Failed to load profile directory (" PROFILE_DIRECTORY ")");
+        perror("Failed to load benchmarking directory (" PROFILE_DIRECTORY ")");
         abort();
     }
 
     while (unit->source_file_name)
     {
-        printf("Profiling #%lu\n", unit_number);
+        printf("Benchmarking #%lu\n", unit_number);
 
         source_file = get_file(unit->source_file_name);
 
@@ -146,7 +146,7 @@ void bf_profile()
 
         clock_t clocks_after = clock();
 
-        printf("Profiling #%lu result: \n", unit_number);
+        printf("Benchmark #%lu result: \n", unit_number);
         printf("Clocks: %lu\n", clocks_after - clocks_before);
         printf("Approximate Seconds: %lu\n\n", (clocks_after - clocks_before) / CLOCKS_PER_SEC);
 

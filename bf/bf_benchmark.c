@@ -2,9 +2,9 @@
 // Created by figurantpp on 22/12/2020.
 //
 
-#include "bf_profile.h"
+#include "bf_benchmark.h"
 
-struct BFProfileUnit bf_global_profile_unit[] = {
+struct BFBenchmarkUnit bf_global_benchmark_units[] = {
         {
                 .name = "Mandelbrot test",
                 .source_file_name = "mandel.bf",

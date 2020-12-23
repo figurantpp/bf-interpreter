@@ -2,10 +2,10 @@
 // Created by figurantpp on 22/12/2020.
 //
 
-#ifndef BF_BF_PROFILE_H
-#define BF_BF_PROFILE_H
+#ifndef BF_BF_BENCHMARK_H
+#define BF_BF_BENCHMARK_H
 
-struct BFProfileUnit
+struct BFBenchmarkUnit
 {
     const char *name;
     const char *source_file_name;
@@ -13,6 +13,6 @@ struct BFProfileUnit
     const char *input_file_name;
 };
 
-extern struct BFProfileUnit bf_global_profile_unit[];
+extern struct BFBenchmarkUnit bf_global_benchmark_units[];
 
-#endif //BF_BF_PROFILE_H
+#endif //BF_BF_BENCHMARK_H
