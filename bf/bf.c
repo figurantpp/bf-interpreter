@@ -10,7 +10,6 @@
 #include <stdlib.h>
 
 
-
 void bf_advance_data_cursor(struct BFState *bf_state)
 {
     if (bf_state->data_cursor == bf_state->data_buffer_start + bf_state->data_buffer_limit)
@@ -80,8 +79,10 @@ void bf_left_brace(struct BFState *bf_state)
     {
         switch (*pointer)
         {
-            case ']': open_count--; break;
-            case '[': open_count++; break;
+            case ']': open_count--;
+                break;
+            case '[': open_count++;
+                break;
         }
 
         pointer++;
@@ -136,8 +137,10 @@ void bf_right_brace(struct BFState *bf_state)
     {
         switch (*pointer)
         {
-            case '[': open_count--; break;
-            case ']': open_count++; break;
+            case '[': open_count--;
+                break;
+            case ']': open_count++;
+                break;
         }
 
         pointer--;
@@ -199,8 +202,20 @@ void bf_loop(struct BFState *bf_state)
     }
 }
 
-void bf_execute(const char *source_code, FILE* input_file, FILE *output_file)
+#define null_check(parameter) \
+    ({                        \
+        if (parameter == NULL)\
+        {                     \
+            fprintf(stderr, "%s: NULL parameter %s given. Aborting.\n", __FUNCTION__, #parameter); \
+            abort();\
+        }                 \
+    })
+
+void bf_execute(const char *source_code, FILE *input_file, FILE *output_file)
 {
+    null_check(source_code);
+    null_check(input_file);
+
     struct BFState bf_state[1] = {{}};
 
     bf_state->source_code_start = source_code;
@@ -212,28 +227,24 @@ void bf_execute(const char *source_code, FILE* input_file, FILE *output_file)
     bf_execute_state(bf_state);
 }
 
-void bf_execute_string(const char *source_code)
-{
-    bf_execute(source_code, stdin, stdout);
-}
 
+/**
+ * Executes using the given bf_state.
+ * @param bf_state
+ * @note If the \p data_buffer property of the given state is NULL and the data_buffer_length property is 0,
+ * a buffer of size \p BF_DEFAULT_BUFFER_LIMIT is automatically allocated and fred.
+ * @note If the state contains a data buffer and a source code but the cursor pointers are set to NULL,
+ * they will point of the start of their respective strings.
+ */
 void bf_execute_state(struct BFState *bf_state)
 {
-    if (bf_state == NULL)
-    {
-        fprintf(stderr, "bf_execute_state: NULL bf_state given.\n");
-        abort();
-    }
-
-    if (bf_state->source_code_start == NULL)
-    {
-        fprintf(stderr, "bf_execute_state: NULL source code given.\n");
-        abort();
-    }
+    null_check(bf_state);
+    null_check(bf_state->source_code_start);
 
     unsigned char is_self_allocated = 0;
 
-    if (bf_state->data_buffer_start == NULL && bf_state->data_buffer_limit == 0 && bf_state->data_cursor == NULL) {
+    if (bf_state->data_buffer_start == NULL && bf_state->data_buffer_limit == 0 && bf_state->data_cursor == NULL)
+    {
 
         is_self_allocated = 1;
 
@@ -250,16 +261,6 @@ void bf_execute_state(struct BFState *bf_state)
         bf_state->data_cursor = data_buffer;
 
         bf_state->data_buffer_limit = BF_DEFAULT_BUFFER_LIMIT;
-    }
-
-    if (bf_state->input_file == NULL)
-    {
-        bf_state->input_file = stdin;
-    }
-
-    if (bf_state->output_file == NULL)
-    {
-        bf_state->output_file = stdout;
     }
 
     if (bf_state->data_cursor == NULL)
@@ -279,5 +280,6 @@ void bf_execute_state(struct BFState *bf_state)
     if (is_self_allocated)
     {
         free(bf_state->data_buffer_start);
+        bf_state->data_buffer_start = NULL;
     }
 }
