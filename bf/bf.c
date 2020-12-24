@@ -3,7 +3,6 @@
 //
 
 #include "bf.h"
-#include "../cmap/cmap.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -14,6 +13,9 @@
 
 struct BFState
 {
+    /**
+     * Start of source code
+     */
     const char *source_code_start;
     const char *source_cursor;
     char *data_cursor;
@@ -23,11 +25,8 @@ struct BFState
     size_t data_buffer_limit;
     size_t source_code_length;
 
-    struct BFMetadata
-    {
-        CMap *brace_map;
-    } metadata;
 
+    const char **jump_table;
 
 };
 
@@ -35,7 +34,7 @@ struct BFState
 static void bf_execute_state(struct BFState *bf_state);
 
 
-void bf_advance_data_cursor(struct BFState *bf_state)
+static inline void bf_advance_data_cursor(struct BFState *bf_state)
 {
 #if BOUND_CHECK
     if (bf_state->data_cursor == bf_state->data_buffer_start + bf_state->data_buffer_limit)
@@ -48,7 +47,7 @@ void bf_advance_data_cursor(struct BFState *bf_state)
     bf_state->data_cursor++;
 }
 
-void bf_retreat_data_cursor(struct BFState *bf_state)
+static inline void bf_retreat_data_cursor(struct BFState *bf_state)
 {
 #if BOUND_CHECK
     if (bf_state->data_cursor == bf_state->data_buffer_start)
@@ -76,7 +75,7 @@ static inline void bf_write_output(struct BFState *bf_state)
     fputc(*bf_state->data_cursor, bf_state->output_file);
 }
 
-void bf_read_input(struct BFState *bf_state)
+static inline void bf_read_input(struct BFState *bf_state)
 {
     int input = fgetc(bf_state->input_file);
 
@@ -90,12 +89,12 @@ void bf_read_input(struct BFState *bf_state)
 // 	then instead of moving the instruction pointer forward to the next command,
 // 	jump it forward to the command after the matching ] command.
 
-void bf_left_brace(struct BFState *bf_state)
+static inline void bf_left_brace(struct BFState *bf_state)
 {
     if (*bf_state->data_cursor != 0)
     { return; }
 
-    const char *result = cmap_get(bf_state->metadata.brace_map, bf_state->source_cursor);
+    const char *result = bf_state->jump_table[bf_state->source_cursor - bf_state->source_code_start];
 
 #if BOUND_CHECK
     if (result == NULL)
@@ -112,12 +111,12 @@ void bf_left_brace(struct BFState *bf_state)
 // 	if the byte at the data pointer is nonzero,
 // 	then instead of moving the instruction pointer forward to the next command,
 // 	jump it back to the command after the matching [ command.
-void bf_right_brace(struct BFState *bf_state)
+static inline void bf_right_brace(struct BFState *bf_state)
 {
     if (*bf_state->data_cursor == 0)
     { return; }
 
-    const char *result = cmap_get(bf_state->metadata.brace_map, bf_state->source_cursor);
+    const char *result = bf_state->jump_table[bf_state->source_cursor - bf_state->source_code_start];
 
 #if BOUND_CHECK
     if (result == NULL)
@@ -223,15 +222,6 @@ void bf_get_metadata(struct BFState *bf_state)
 {
     // First part: looking at the source to find number of open and close braces
 
-    CMap *map = cmap_new();
-
-    if (map == NULL)
-    {
-        fprintf(stderr, "Allocation of map to execute source code failed\n");
-        abort();
-    }
-
-    bf_state->metadata.brace_map = map;
 
     unsigned long left_brace_count = 0;
     unsigned long right_brace_count = 0;
@@ -261,6 +251,14 @@ void bf_get_metadata(struct BFState *bf_state)
         abort();
     }
 
+    bf_state->jump_table = calloc(bf_state->source_code_length, sizeof(const char*));
+
+    if (bf_state->jump_table == NULL)
+    {
+        perror("Failed to allocate jump table to execute source code");
+        abort();
+    }
+
     position = bf_state->source_code_start;
 
     // Second part: mapping positions
@@ -274,9 +272,12 @@ void bf_get_metadata(struct BFState *bf_state)
             bf_state->source_cursor = position;
             bf_seek_matching_right_brace(bf_state);
 
+            const char *left_position = position;
+            const char *right_position = bf_state->source_cursor;
+
             // Both left and right index have to be mapped
-            cmap_set(bf_state->metadata.brace_map, position, bf_state->source_cursor);
-            cmap_set(bf_state->metadata.brace_map, bf_state->source_cursor, position);
+            bf_state->jump_table[left_position - bf_state->source_code_start] = right_position;
+            bf_state->jump_table[right_position - bf_state->source_code_start] = left_position;
 
             index_position++;
         }
