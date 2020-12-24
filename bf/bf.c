@@ -292,6 +292,11 @@ void bf_get_metadata(struct BFState *bf_state)
     bf_state->source_cursor = bf_state->source_code_start;
 }
 
+void bf_cleanup_metadata(struct BFState *bf_state)
+{
+    free(bf_state->jump_table);
+}
+
 #define null_check(parameter) \
     ({                        \
         if (parameter == NULL)\
@@ -366,6 +371,8 @@ void bf_execute_state(struct BFState *bf_state)
     bf_get_metadata(bf_state);
 
     bf_loop(bf_state);
+
+    bf_cleanup_metadata(bf_state);
 
     fflush(bf_state->output_file);
 
