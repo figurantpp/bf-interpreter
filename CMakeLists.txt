@@ -11,7 +11,7 @@ add_library(
         external/streams.h
 )
 
-add_executable(bf main.c bf/bf.c bf/bf.h big_input.h bf/bf_tests.c bf/bf_tests.h bf/bf_benchmark.c bf/bf_benchmark.h
-        )
+add_executable(bf main.c bf/bf.c bf/bf.h big_input.h testing/bf_tests.c testing/bf_tests.h testing/bf_benchmark.c testing/bf_benchmark.h
+        testing/testing.c testing/testing.h)
 
 target_link_libraries(bf external)

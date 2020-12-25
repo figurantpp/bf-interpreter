@@ -1,165 +1,136 @@
 
 #include <stdio.h>
-#include <string.h>
-#include <assert.h>
-#include <stdlib.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <errno.h>
-#include <time.h>
+#include <string.h>
 
 #include "bf/bf.h"
-#include "bf/bf_tests.h"
-#include "bf/bf_benchmark.h"
-
-
-#define RED_COLOR "\033[0;31m"
-#define RESET_COLOR "\033[0;0m"
-#define GREEN_COLOR "\033[0;32m"
-
-#define PROFILE_DIRECTORY "/home/figurantpp/Desktop/programming/c/bf/test_input"
-
 #include "external/streams.h"
 
+#define BF_EXIT_BAD_USAGE 2
+#define BF_EXIT_IO 3
 
-void bf_test()
+int main(int argc, char * const * argv)
 {
-    char *output = NULL;
-    size_t output_size = 0;
 
-    FILE *output_file = open_memstream(&output, &output_size);
+#define show_usage() ({fprintf(stderr, "Usage: %s [-i input_file] [-o output_file] source_code\n", argv[0]);})
 
-
-    if (output_file == NULL)
+    if (argc == 0)
     {
-        perror("Failed to open test memstream");
-        exit(1);
+        puts("Missing argv");
+        exit(BF_EXIT_BAD_USAGE);
     }
 
-    struct BFTest* test = global_bf_tests;
+    int option;
 
-    unsigned long test_index = 0;
+    const char *input_file_name = NULL;
+    const char *output_file_name = NULL;
+    const char *source_code_file_name = NULL;
 
-    FILE *input_file = NULL;
-
-    while (test->source_code || test->expected_output)
+    while ((option = getopt(argc, argv, "i:o:")) != -1)
     {
-        if (test->input != NULL)
+        switch (option)
         {
-            input_file = fmemopen((char*) test->input, strlen(test->input), "r");
-
-            if (input_file == NULL)
-            {
-                fprintf(stderr, "Failed to set input file for test #%lu", test_index + 1);
-                abort();
-            }
+            case 'i':
+                input_file_name = optarg;
+                break;
+            case 'o':
+                output_file_name = optarg;
+                break;
+            default:
+                show_usage();
+                exit(BF_EXIT_BAD_USAGE);
         }
-
-        rewind(output_file);
-
-        memset(output, 0, output_size);
-
-        bf_execute(test->source_code, input_file ?: stdin, output_file);
-
-        if (strcmp(test->expected_output, output) != 0)
-        {
-            printf(RED_COLOR);
-
-            printf("Test #%lu (%s) failed.\n", test_index, test->test_name);
-            printf("Expected Output: %.40s\n", test->expected_output);
-            printf("Output: %.40s\n", output);
-
-            printf(RESET_COLOR);
-
-            assert(strcmp(test->expected_output, output) == 0);
-        }
-
-        if (input_file != NULL)
-        {
-            fclose(input_file);
-        }
-
-        input_file = NULL;
-        printf("Test #%lu (%s) passed\n", test_index + 1, test->test_name);
-        fflush(stdout);
-        fflush(stderr);
-
-        test++;
-        test_index++;
-
-
     }
 
-    fclose(output_file);
-
-    free(output);
-
-    printf(GREEN_COLOR "All %lu Tests Passed" RESET_COLOR, test_index);
-}
-
-__attribute__((returns_nonnull))
-FILE *get_file(const char *path)
-{
-    FILE *file = fopen(path, "r");
-
-    if (!file)
+    if (argc == 1)
     {
-        fprintf(stderr, "Failed to open file '%s' : %s\n", path, strerror(errno));
-        abort();
+        fputs("Missing bf file to execute\n", stderr);
+        show_usage();
+        exit(BF_EXIT_BAD_USAGE);
     }
 
-    return file;
-}
-
-void bf_benchmark()
-{
-    struct BFBenchmarkUnit* unit = bf_global_benchmark_units;
-
-    unsigned long unit_number = 1;
-
-    FILE *input_file;
-    FILE *source_file;
-
-    if (chdir(PROFILE_DIRECTORY) != 0)
+    if (optind >= argc)
     {
-        perror("Failed to load benchmarking directory (" PROFILE_DIRECTORY ")");
-        abort();
+        fprintf(stderr, "Missing argument after command line options\n");
+        show_usage();
+        exit(BF_EXIT_BAD_USAGE);
     }
 
-    while (unit->source_file_name)
+    source_code_file_name = argv[optind];
+
+
+    FILE *source_code_file = fopen(source_code_file_name, "r");
+
+    if (source_code_file == NULL)
     {
-        printf("Benchmarking #%lu\n", unit_number);
+        perror("Failed to open source code file");
+        exit(BF_EXIT_IO);
+    }
 
-        source_file = get_file(unit->source_file_name);
+    size_t source_code_length = 0;
 
-        char *source_code = read_whole_file(source_file, NULL);
+    char *source_code = read_whole_file(source_code_file, &source_code_length);
 
-        if (!source_code)
+    if (source_code == NULL)
+    {
+        perror("Failed to read source code");
+        exit(BF_EXIT_IO);
+    }
+
+    fclose(source_code_file);
+
+    FILE *input_file = stdin;
+    FILE *output_file = stdout;
+
+    if (input_file_name != NULL)
+    {
+        input_file = fopen(input_file_name, "r");
+
+        if (input_file == NULL)
         {
-            fprintf(stderr, "Failed to load input file %s: %s", unit->input_file_name, strerror(errno));
-            abort();
+            int error = errno;
+
+            fprintf(stderr,
+                    "%s: Failed to open provided input file %s: %s\n",
+                    argv[0], input_file_name, strerror(error));
+
+            exit(BF_EXIT_IO);
         }
-
-        fclose(source_file);
-
-        input_file = unit->input_file_name ? get_file(unit->input_file_name) : stdin;
-
-        clock_t clocks_before = clock();
-
-        bf_execute(source_code, input_file, stdout);
-
-        clock_t clocks_after = clock();
-
-        printf("Benchmark #%lu result: \n", unit_number);
-        printf("Clocks: %lu\n", clocks_after - clocks_before);
-        printf("Approximate Seconds: %lu\n\n", (clocks_after - clocks_before) / CLOCKS_PER_SEC);
-
-        unit_number++;
-        unit++;
     }
-}
 
-int main()
-{
-    bf_test();
-    return 0;
+    if (output_file_name != NULL)
+    {
+        output_file = fopen(output_file_name, "w");
+
+        if (output_file == NULL)
+        {
+            int error = errno;
+
+            fprintf(stderr,
+                    "%s: Failed to open provided output file %s: %s\n",
+                    argv[0], output_file_name, strerror(error));
+
+            exit(BF_EXIT_IO);
+        }
+    }
+
+
+    bf_execute(source_code, source_code_length, input_file, output_file);
+
+    free(source_code);
+
+    if (input_file_name != NULL)
+    {
+        fclose(input_file);
+    }
+
+   if (output_file_name != NULL)
+    {
+        fclose(output_file);
+    }
+
+
+   return 0;
 }

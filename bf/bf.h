@@ -10,8 +10,7 @@
 
 
 
-void bf_execute(const char *source_code, FILE *input, FILE *output);
-void bf_execute_string(const char *source_code);
+void bf_execute(const char *source_code, size_t source_code_length, FILE *input_file, FILE *output_file);
 
 
 #define BF_DEFAULT_BUFFER_LIMIT 4196lu

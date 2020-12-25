@@ -306,7 +306,7 @@ void bf_cleanup_metadata(struct BFState *bf_state)
         }                 \
     })
 
-void bf_execute(const char *source_code, FILE *input_file, FILE *output_file)
+void bf_execute(const char *source_code, size_t source_code_length, FILE *input_file, FILE *output_file)
 {
     null_check(source_code);
     null_check(input_file);
@@ -314,7 +314,7 @@ void bf_execute(const char *source_code, FILE *input_file, FILE *output_file)
     struct BFState bf_state[1] = {{}};
 
     bf_state->source_code_start = source_code;
-    bf_state->source_code_length = strlen(source_code);
+    bf_state->source_code_length = source_code_length ?: strlen(source_code);
     bf_state->source_cursor = source_code;
     bf_state->input_file = input_file;
     bf_state->output_file = output_file;
