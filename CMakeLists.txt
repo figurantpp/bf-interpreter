@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.17)
-project(bf C)
+cmake_minimum_required(VERSION 3.15)
+project(bfi C)
 
 set(CMAKE_C_STANDARD 99)
 
@@ -11,7 +11,8 @@ add_library(
         external/streams.h
 )
 
-add_executable(bf main.c bf/bf.c bf/bf.h big_input.h testing/bf_tests.c testing/bf_tests.h testing/bf_benchmark.c testing/bf_benchmark.h
+add_executable(bfi main.c bf/bf.c bf/bf.h big_input.h testing/bf_tests.c testing/bf_tests.h testing/bf_benchmark.c
+        testing/bf_benchmark.h
         testing/testing.c testing/testing.h)
 
-target_link_libraries(bf external)
+target_link_libraries(bfi external)

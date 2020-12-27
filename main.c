@@ -11,16 +11,53 @@
 #define BF_EXIT_BAD_USAGE 2
 #define BF_EXIT_IO 3
 
+#define VERSION_NUMBER "0.0.1"
+
+const char *program_name;
+
+void write_usage(FILE *file)
+{
+    fprintf(file, "Usage: %s [-h] [-v] [-i input_file] [-o output_file] source_code\n", program_name);
+}
+
+#define show_usage() ({write_usage(stderr);})
+
+void show_version()
+{
+    printf("%s (BFI) " VERSION_NUMBER "\n" "figurant++\n", program_name);
+}
+
+void show_help()
+{
+    write_usage(stdout);
+
+    puts("\n"
+         "  OPTIONS\n"
+         "      -h\n"
+         "          Display this help message\n"
+         "      -v\n"
+         "          Display program version\n"
+         "      -i input_file\n"
+         "          File used for read (',' bf instruction) calls.\n"
+         "          The program's stdin will be used if this option is not provided.\n"
+         "\n"
+         "      -o output_file\n"
+         "          File used to write ('.' bf instruction) calls.\n"
+         "          Defaults to the program's stdout if not provided.\n"
+
+         );
+}
+
 int main(int argc, char * const * argv)
 {
-
-#define show_usage() ({fprintf(stderr, "Usage: %s [-i input_file] [-o output_file] source_code\n", argv[0]);})
-
     if (argc == 0)
     {
-        puts("Missing argv");
+        fputs("No arv[0] provided.\n", stderr);
+        show_usage();
         exit(BF_EXIT_BAD_USAGE);
     }
+
+    program_name = argv[0];
 
     int option;
 
@@ -38,6 +75,12 @@ int main(int argc, char * const * argv)
             case 'o':
                 output_file_name = optarg;
                 break;
+            case 'v':
+                show_version();
+                exit(EXIT_SUCCESS);
+            case 'h':
+                show_help();
+                exit(EXIT_SUCCESS);
             default:
                 show_usage();
                 exit(BF_EXIT_BAD_USAGE);
@@ -51,14 +94,15 @@ int main(int argc, char * const * argv)
         exit(BF_EXIT_BAD_USAGE);
     }
 
-    if (optind >= argc)
+    source_code_file_name = argv[optind];
+
+    if (source_code_file_name == NULL)
     {
-        fprintf(stderr, "Missing argument after command line options\n");
+        fprintf(stderr, "Missing source code file.\n");
         show_usage();
         exit(BF_EXIT_BAD_USAGE);
     }
 
-    source_code_file_name = argv[optind];
 
 
     FILE *source_code_file = fopen(source_code_file_name, "r");
